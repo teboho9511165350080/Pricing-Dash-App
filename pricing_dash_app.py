@@ -5,6 +5,7 @@ Created on Fri Apr 23 20:26:44 2021
 @author: LekenoTR
 """
 import pandas as pd
+import math
 import dash
 import os
 import base64
@@ -14,8 +15,10 @@ import dash_bootstrap_components as dbc
 import plotly.express as px
 from dash.dependencies import Input, Output
 
+import coordinates_shifter as cs
 
-mapbox_access_token = 'pk.eyJ1IjoidGVib2hvbGVrZW5vIiwiYSI6ImNrbnE3cW9ybjBhN3UycHBmemYxMWVtencifQ.p9ZpEWxK3Hupdklm17QVJg'
+mapbox_access_token = 'pk.eyJ1IjoidGVib2hvbGVrZW5vIiwiYSI6ImNrbnE3cW9ybjBhN3Uy'
+mapbox_access_token += 'cHBmemYxMWVtencifQ.p9ZpEWxK3Hupdklm17QVJg'
 
 xls = pd.ExcelFile(os.getcwd()+'\\Copy of Results_rands_10052021_coordinates.xlsx')
 years_list = xls.sheet_names
@@ -39,12 +42,13 @@ for index in range(len(years_list)):
 #merging Plants and Assets_name columns
 for index in range(len(substations.index)):
     if pd.isnull(substations['Plant'][index]):
-        substations['Plant'][index] = substations['Asset_name'][index]
+        substations.loc[index, 'Plant'] = substations.loc[index, 'Asset_name']
         
 del substations['Asset_name'] #removing the Asset_name column after merging
 substations.dropna()  #removing empty rows
 substations['Marks'] = 1
-substations.sort_values(by=['PS_name'], inplace=True)
+ 
+
 
 
 image_filename = 'logo3.png'
@@ -158,7 +162,7 @@ def update_generic_slider(chosen_slider):
                     id = 'study-years',
                     min = substations["Year"].min(),
                     max = substations["Year"].max(),
-                    value = substations["Year"].min(),
+                    value = [substations["Year"].min()],
                     marks = {i: str(i) for i in range(substations["Year"].max()+1)},
                     included = False
                 )
@@ -174,6 +178,8 @@ def update_generic_slider(chosen_slider):
 
 def update_figure(chosen_generator,chosen_study_years, chosen_slider):
     
+    map_zoom = 5
+    
     substations_copy = substations
     
     if bool(chosen_generator):
@@ -187,19 +193,28 @@ def update_figure(chosen_generator,chosen_study_years, chosen_slider):
     elif chosen_slider == 'slider':
         substations_final = substations_copy[
             substations_copy['Year'] == chosen_study_years]
+   
+    if len(chosen_generator) == 1:
+    #if a single power station is selected, assets coordinates are shifted so that all assets are visible
+    #on the map
+        substations_final = cs.shift_coordinates (
+            substations_final, chosen_study_years, chosen_slider)
+        map_zoom = 14
     
     fig = px.scatter_mapbox(substations_final, lat = "Latitude", lon = "Longitude", 
                             hover_name = "PS_name", hover_data = ["Plant", "Total_cost", "Year"],
-                            color = "Total_cost", zoom = 5, size = "Marks", size_max=10)
+                            color = "Total_cost", zoom = map_zoom, size = "Marks", size_max=10)
     
     fig.update_layout (mapbox_style = 'basic'
                        , mapbox_accesstoken = mapbox_access_token, 
                         margin={"r": 2,"t":2,"l":2,"b":2}, 
                         paper_bgcolor = 'rgba(0,0,0,0)',
                         plot_bgcolor = 'rgba(0,0,0,0)')
+    
+    fig.update_traces(
+                  selector=dict(mode='markers'))
 
     return fig
-
     
 
 if __name__ == '__main__':
